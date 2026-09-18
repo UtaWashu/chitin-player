@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Chitin Audio - Scolopendra Player</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --bg-color: #050706;
+            --panel-color: #0b100d;
+            --accent-green: #00e676;
+            --accent-red: #ff1744;
+            --text-dim: #78909c;
+            --text-main: #ffffff;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .phone-container {
+            width: 100%;
+            max-width: 412px;
+            height: 100%;
+            max-height: 846px;
+            background: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 24px;
+            position: relative;
+            box-shadow: 0 0 40px rgba(0, 0, 0, 0.8);
+            border: 1px solid #111d16;
+            overflow: hidden;
+        }
+
+        /* Шапка */
+        .header {
+            text-align: center;
+            margin-top: 10px;
+        }
+        .header h1 {
+            font-size: 11px;
+            letter-spacing: 3px;
+            color: var(--accent-green);
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+        .header p {
+            font-size: 13px;
+            color: var(--text-dim);
+            margin-top: 4px;
+        }
+
+        /* Центральный визуализатор (Уроборос из сколопендры) */
+        .center-stage {
+            position: relative;
+            width: 280px;
+            height: 280px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #centipedeCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+
+        .track-info-center {
+            text-align: center;
+            z-index: 2;
+            pointer-events: none;
+        }
+        .track-info-center h2 {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-main);
+            text-shadow: 0 2px 10px rgba(0,0,0,0.9);
+            max-width: 220px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .track-info-center span {
+            font-size: 11px;
+            color: var(--accent-red);
+            font-weight: 600;
+        }
+
+        /* Интерактивный хребет-прогрессбар */
+        .seekbar-container {
+            width: 100%;
+            margin-bottom: 20px;
+        }
+
+        #spineCanvas {
+            width: 100%;
+            height: 50px;
+            cursor: pointer;
+        }
+
+        .time-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: var(--text-dim);
+            margin-top: 4px;
+        }
+        .time-row .active-status {
+            color: var(--accent-green);
+            font-weight: 600;
+            letter-spacing: 1px;
+        }
+
+        /* Кнопки управления */
+        .controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 10px;
+        }
+
+        .btn {
+            background: var(--panel-color);
+            border: 1px solid #1a2e22;
+            color: var(--accent-green);
+            width: 46px;
+            height: 46px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.2s ease;
+        }
+
+        .btn-play {
+            width: 60px;
+            height: 60px;
+            background: #0f1c14;
+            border: 2px solid var(--accent-green);
+            color: var(--accent-green);
+            font-size: 22px;
+            box-shadow: 0 0 15px rgba(0, 230, 118, 0.2);
+        }
+
+        .btn:active {
+            transform: scale(0.92);
+            background: #15261d;
+        }
+
+        /* Выдвижная панель каталога (плейлист) */
+        .playlist-drawer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(5, 7, 6, 0.96);
+            backdrop-filter: blur(12px);
+            z-index: 50;
+            display: flex;
+            flex-direction: column;
+            padding: 24px;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transform: translateY(100%);
+        }
+
+        .playlist-drawer.open {
+            transform: translateY(0);
+        }
+
+        .mode-btn.active {
+            color: var(--accent-green);
+            border-color: var(--accent-green);
+            background: rgba(0, 230, 118, 0.1);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="phone-container" id="appContainer">
+        
+        <!-- Выдвижной каталог треков -->
+        <div id="playlistDrawer" class="playlist-drawer">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-sm tracking-widest text-[#00e676] font-bold uppercase">Chitin Catalog</h3>
+                <button id="closePlaylist" class="text-[#78909c] hover:text-white text-lg px-2 py-1 cursor-pointer">✕</button>
+            </div>
+            <div id="playlistItems" class="flex flex-col gap-3 overflow-y-auto flex-1 pr-1">
+                <!-- Динамические треки плейлиста -->
+            </div>
+            <div class="mt-4 pt-4 border-t border-[#111d16] text-center">
+                <p class="text-[11px] text-[#78909c]">Выберите образец для ритуального прослушивания</p>
+            </div>
+        </div>
+
+        <!-- Шапка -->
+        <div class="header text-center mt-2 flex justify-between items-center">
+            <button id="menuBtn" class="text-[#78909c] hover:text-[#00e676] text-xs tracking-wider uppercase bg-[#0b100d] border border-[#1a2e22] px-3 py-1.5 rounded-full cursor-pointer transition">Каталог</button>
+            <div>
+                <h1>Chitin Audio System</h1>
+                <p>Dark Industrial / Ritual</p>
+            </div>
+            <div class="w-16"></div>
+        </div>
+
+        <!-- Кнопки режимов: Рандом и Повтор -->
+        <div class="flex justify-center items-center gap-3 my-2">
+            <button id="shuffleBtn" class="mode-btn text-[11px] text-[#78909c] bg-[#0b100d] border border-[#1a2e22] px-3 py-1 rounded-full cursor-pointer transition flex items-center gap-1.5" title="Режим случайного воспроизведения">
+                <span>🔀</span> <span id="shuffleStatus">Рандом: ВЫКЛ</span>
+            </button>
+            <button id="repeatBtn" class="mode-btn text-[11px] text-[#78909c] bg-[#0b100d] border border-[#1a2e22] px-3 py-1 rounded-full cursor-pointer transition flex items-center gap-1.5" title="Режим повтора">
+                <span>🔁</span> <span id="repeatStatus">Повтор: ВЫКЛ</span>
+            </button>
+        </div>
+
+        <!-- Центральный элемент: Ползущая по кругу сколопендра -->
+        <div class="center-stage" id="stageContainer">
+            <canvas id="centipedeCanvas" width="280" height="280"></canvas>
+            <div class="track-info-center">
+                <h2 id="trackTitle">Venom Ring</h2>
+                <span id="statusText">ПАУЗА</span>
+            </div>
+        </div>
+
+        <!-- Нижняя часть: Хребет-Seekbar и Управление -->
+        <div>
+            <div class="seekbar-container">
+                <canvas id="spineCanvas" width="364" height="50"></canvas>
+                <div class="time-row">
+                    <span id="currentTime">0:00</span>
+                    <span class="active-status">СЕГМЕНТЫ АКТИВНЫ</span>
+                    <span id="totalTime">3:45</span>
+                </div>
+            </div>
+
+            <div class="controls">
+                <div class="btn" id="prevBtn" title="Предыдущий трек">&#9664;&#9664;</div>
+                <div class="btn btn-play" id="playBtn" title="Воспроизвести / Пауза">&#9658;</div>
+                <div class="btn" id="nextBtn" title="Следующий трек">&#9654;&#9654;</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Данные плейлиста ритуальных треков
+        const playlist = [
+            { title: "Venom Ring", duration: 225, subtitle: "Specimen #01", baseFreq: 52 },
+            { title: "Mandible Pulse", duration: 198, subtitle: "Specimen #02", baseFreq: 64 },
+            { title: "Chitinous Resonance", duration: 260, subtitle: "Specimen #03", baseFreq: 45 },
+            { title: "Abyssal Segment", duration: 210, subtitle: "Specimen #04", baseFreq: 70 },
+            { title: "Exoskeleton Heavy Drone", duration: 245, subtitle: "Specimen #05", baseFreq: 38 }
+        ];
+
+        let currentTrackIndex = 0;
+        let isPlaying = false;
+        let progress = 0; // от 0 до 1
+        let rotationAngle = 0;
+
+        // Режимы воспроизведения
+        let isShuffle = false;
+        let repeatMode = 'off'; // 'off' | 'all' | 'one'
+        let shuffledQueue = [];
+
+        const centipedeCanvas = document.getElementById('centipedeCanvas');
+        const ctxC = centipedeCanvas.getContext('2d');
+
+        const spineCanvas = document.getElementById('spineCanvas');
+        const ctxS = spineCanvas.getContext('2d');
+
+        const playBtn = document.getElementById('playBtn');
+        const prevBtn = document.getElementById('prevBtn');
+        const nextBtn = document.getElementById('nextBtn');
+        const shuffleBtn = document.getElementById('shuffleBtn');
+        const repeatBtn = document.getElementById('repeatBtn');
+        const shuffleStatus = document.getElementById('shuffleStatus');
+        const repeatStatus = document.getElementById('repeatStatus');
+
+        const statusText = document.getElementById('statusText');
+        const trackTitle = document.getElementById('trackTitle');
+        const currentTimeEl = document.getElementById('currentTime');
+        const totalTimeEl = document.getElementById('totalTime');
+        
+        const menuBtn = document.getElementById('menuBtn');
+        const closePlaylist = document.getElementById('closePlaylist');
+        const playlistDrawer = document.getElementById('playlistDrawer');
+        const playlistItemsContainer = document.getElementById('playlistItems');
+
+        // Web Audio API Синтезатор дарк-индастриал гула
+        let audioCtx = null;
+        let oscNode = null;
+        let gainNode = null;
+        let filterNode = null;
+
+        function initAudio() {
+            if (!audioCtx) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContext();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function startDrone() {
+            try {
+                initAudio();
+                if (oscNode) stopDrone();
+
+                oscNode = audioCtx.createOscillator();
+                oscNode.type = 'sawtooth';
+                oscNode.frequency.setValueAtTime(playlist[currentTrackIndex].baseFreq, audioCtx.currentTime);
+
+                filterNode = audioCtx.createBiquadFilter();
+                filterNode.type = 'lowpass';
+                filterNode.frequency.setValueAtTime(280, audioCtx.currentTime);
+
+                gainNode = audioCtx.createGain();
+                gainNode.gain.setValueAtTime(0.001, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.14, audioCtx.currentTime + 1.2);
+
+                oscNode.connect(filterNode);
+                filterNode.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+
+                oscNode.start();
+            } catch (e) {
+                console.warn("Audio context restricted", e);
+            }
+        }
+
+        function stopDrone() {
+            if (oscNode && gainNode && audioCtx) {
+                try {
+                    gainNode.gain.setValueAtTime(gainNode.gain.value, audioCtx.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.4);
+                    setTimeout(() => {
+                        if (oscNode) {
+                            oscNode.stop();
+                            oscNode.disconnect();
+                            oscNode = null;
+                        }
+                    }, 400);
+                } catch (e) {
+                    oscNode = null;
+                }
+            }
+        }
+
+        function updateShuffleQueue() {
+            shuffledQueue = [...Array(playlist.length).keys()];
+            if (isShuffle) {
+                // Алгоритм Фишера-Йетса
+                for (let i = shuffledQueue.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [shuffledQueue[i], shuffledQueue[j]] = [shuffledQueue[j], shuffledQueue[i]];
+                }
+                const currPos = shuffledQueue.indexOf(currentTrackIndex);
+                if (currPos > -1) {
+                    shuffledQueue.splice(currPos, 1);
+                    shuffledQueue.unshift(currentTrackIndex);
+                }
+            }
+        }
+
+        function renderPlaylist() {
+            playlistItemsContainer.innerHTML = '';
+            playlist.forEach((track, index) => {
+                const item = document.createElement('div');
+                item.className = `p-3 rounded-lg border transition cursor-pointer flex justify-between items-center ${index === currentTrackIndex ? 'bg-[#0f2418] border-[#00e676]' : 'bg-[#0b100d] border-[#16241b] hover:border-[#264231]'}`;
+                item.innerHTML = `
+                    <div>
+                        <div class="text-sm font-bold text-white">${track.title}</div>
+                        <div class="text-[11px] text-[#78909c]">${track.subtitle}</div>
+                    </div>
+                    <div class="text-xs ${index === currentTrackIndex ? 'text-[#00e676]' : 'text-[#78909c]'}">${formatTime(track.duration)}</div>
+                `;
+                item.addEventListener('click', () => {
+                    selectTrack(index);
+                    togglePlaylist(false);
+                });
+                playlistItemsContainer.appendChild(item);
+            });
+        }
+
+        function formatTime(totalSecs) {
+            const mins = Math.floor(totalSecs / 60);
+            const secs = totalSecs % 60;
+            return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+        }
+
+        function selectTrack(index, resetProgress = true) {
+            currentTrackIndex = index;
+            if (resetProgress) progress = 0;
+            trackTitle.textContent = playlist[currentTrackIndex].title;
+            totalTimeEl.textContent = formatTime(playlist[currentTrackIndex].duration);
+            renderPlaylist();
+            if (isPlaying) {
+                startDrone();
+            }
+        }
+
+        function togglePlaylist(show) {
+            if (show) {
+                playlistDrawer.classList.add('open');
+            } else {
+                playlistDrawer.classList.remove('open');
+            }
+        }
+
+        menuBtn.addEventListener('click', () => togglePlaylist(true));
+        closePlaylist.addEventListener('click', () => togglePlaylist(false));
+
+        // Переключение воспроизведения
+        function togglePlay() {
+            isPlaying = !isPlaying;
+            playBtn.innerHTML = isPlaying ? '❚❚' : '▶';
+            statusText.textContent = isPlaying ? 'АКТИВНО' : 'ПАУЗА';
+            statusText.style.color = isPlaying ? '#00e676' : '#ff1744';
+
+            if (isPlaying) {
+                startDrone();
+            } else {
+                stopDrone();
+            }
+        }
+
+        playBtn.addEventListener('click', togglePlay);
+        centipedeCanvas.addEventListener('click', togglePlay);
+
+        // Переход к следующему треку
+        function nextTrack() {
+            if (isShuffle) {
+                let queuePos = shuffledQueue.indexOf(currentTrackIndex);
+                if (queuePos < shuffledQueue.length - 1) {
+                    selectTrack(shuffledQueue[queuePos + 1]);
+                } else {
+                    updateShuffleQueue();
+                    selectTrack(shuffledQueue[0]);
+                }
+            } else {
+                let nextIdx = currentTrackIndex + 1;
+                if (nextIdx >= playlist.length) {
+                    if (repeatMode === 'all') {
+                        nextIdx = 0;
+                    } else {
+                        isPlaying = false;
+                        playBtn.innerHTML = '▶';
+                        statusText.textContent = 'ПАУЗА';
+                        statusText.style.color = '#ff1744';
+                        stopDrone();
+                        progress = 1;
+                        return;
+                    }
+                }
+                selectTrack(nextIdx);
+            }
+        }
+
+        // Переход к предыдущему треку
+        function prevTrack() {
+            const currentTrackDuration = playlist[currentTrackIndex].duration;
+            if (progress * currentTrackDuration > 3) {
+                progress = 0;
+                return;
+            }
+
+            if (isShuffle) {
+                let queuePos = shuffledQueue.indexOf(currentTrackIndex);
+                if (queuePos > 0) {
+                    selectTrack(shuffledQueue[queuePos - 1]);
+                } else {
+                    selectTrack(shuffledQueue[shuffledQueue.length - 1]);
+                }
+            } else {
+                let prevIdx = currentTrackIndex - 1;
+                if (prevIdx < 0) {
+                    prevIdx = playlist.length - 1;
+                }
+                selectTrack(prevIdx);
+            }
+        }
+
+        nextBtn.addEventListener('click', nextTrack);
+        prevBtn.addEventListener('click', prevTrack);
+
+        // Кнопка Рандома
+        shuffleBtn.addEventListener('click', () => {
+            isShuffle = !isShuffle;
+            shuffleBtn.classList.toggle('active', isShuffle);
+            shuffleStatus.textContent = isShuffle ? 'Рандом: ВКЛ' : 'Рандом: ВЫКЛ';
+            if (isShuffle) {
+                updateShuffleQueue();
+            }
+        });
+
+        // Кнопка Повтора (off -> all -> one -> off)
+        repeatBtn.addEventListener('click', () => {
+            if (repeatMode === 'off') {
+                repeatMode = 'all';
+                repeatStatus.textContent = 'Повтор: ВСЕ';
+                repeatBtn.classList.add('active');
+            } else if (repeatMode === 'all') {
+                repeatMode = 'one';
+                repeatStatus.textContent = 'Повтор: 1';
+            } else {
+                repeatMode = 'off';
+                repeatStatus.textContent = 'Повтор: ВЫКЛ';
+                repeatBtn.classList.remove('active');
+            }
+        });
+
+        // Обработка клика/перетаскивания по хребту-скоплендре (Seekbar)
+        let isDragging = false;
+        spineCanvas.addEventListener('mousedown', (e) => { isDragging = true; updateSeek(e); });
+        window.addEventListener('mousemove', (e) => { if (isDragging) updateSeek(e); });
+        window.addEventListener('mouseup', () => { isDragging = false; });
+
+        spineCanvas.addEventListener('touchstart', (e) => { isDragging = true; updateSeekTouch(e); });
+        window.addEventListener('touchmove', (e) => { if (isDragging) updateSeekTouch(e); });
+        window.addEventListener('touchend', () => { isDragging = false; });
+
+        function updateSeek(e) {
+            const rect = spineCanvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            progress = Math.max(0, Math.min(1, x / rect.width));
+        }
+
+        function updateSeekTouch(e) {
+            if (!e.touches || e.touches.length === 0) return;
+            const rect = spineCanvas.getBoundingClientRect();
+            const x = e.touches[0].clientX - rect.left;
+            progress = Math.max(0, Math.min(1, x / rect.width));
+        }
+
+        updateShuffleQueue();
+        selectTrack(0);
+
+        function animate() {
+            // Очистка и отрисовка центральной кольцевой сколопендры
+            ctxC.clearRect(0, 0, centipedeCanvas.width, centipedeCanvas.height);
+            
+            const cx = centipedeCanvas.width / 2;
+            const cy = centipedeCanvas.height / 2;
+            const radius = 95;
+            const numSegments = 32;
+
+            if (isPlaying) {
+                rotationAngle += 0.015;
+            }
+
+            // Фоновые паутинообразные борозды
+            for (let i = 1; i <= 5; i++) {
+                ctxC.beginPath();
+                ctxC.arc(cx, cy, radius * (i / 5), 0, Math.PI * 2);
+                ctxC.strokeStyle = 'rgba(21, 26, 22, 0.4)';
+                ctxC.lineWidth = 1.5;
+                ctxC.stroke();
+            }
+
+            // Отрисовка сегментов кольцевой сколопендры
+            for (let i = 0; i < numSegments; i++) {
+                const angle = (i * Math.PI * 2 / numSegments) + rotationAngle;
+                const x = cx + Math.cos(angle) * radius;
+                const y = cy + Math.sin(angle) * radius;
+
+                const legLen = 16 + (isPlaying ? Math.sin(Date.now() * 0.01 + i) * 5 : 0);
+
+                // Хитиновый сегмент
+                ctxC.beginPath();
+                ctxC.arc(x, y, 9, 0, Math.PI * 2);
+                ctxC.fillStyle = '#18221c';
+                ctxC.fill();
+                ctxC.lineWidth = 1.5;
+                ctxC.strokeStyle = (i === 0) ? '#ff1744' : '#00e676';
+                ctxC.stroke();
+
+                // Лапки наружу
+                const outerX = x + Math.cos(angle) * legLen;
+                const outerY = y + Math.sin(angle) * legLen;
+                ctxC.beginPath();
+                ctxC.moveTo(x, y);
+                ctxC.lineTo(outerX, outerY);
+                ctxC.strokeStyle = '#00332c';
+                ctxC.lineWidth = 2;
+                ctxC.stroke();
+            }
+
+            // Отрисовка хребта-прогрессбара (Seekbar)
+            ctxS.clearRect(0, 0, spineCanvas.width, spineCanvas.height);
+            const spineSegments = 36;
+            const segWidth = spineCanvas.width / spineSegments;
+            const spineCy = spineCanvas.height / 2;
+
+            for (let i = 0; i <= spineSegments; i++) {
+                const sx = i * segWidth;
+                const segProgress = i / spineSegments;
+                const isFilled = segProgress <= progress;
+
+                const waveY = spineCy + Math.sin(i * 0.4 + Date.now() * 0.005) * 4;
+
+                ctxS.beginPath();
+                ctxS.arc(sx, waveY, 5.5, 0, Math.PI * 2);
+                ctxS.fillStyle = isFilled ? '#00e676' : '#1c2620';
+                ctxS.fill();
+
+                // Мелкие ножки хребта
+                if (i % 2 === 0) {
+                    ctxS.beginPath();
+                    ctxS.moveTo(sx, waveY - 3);
+                    ctxS.lineTo(sx - 3, waveY - 12);
+                    ctxS.moveTo(sx, waveY + 3);
+                    ctxS.lineTo(sx - 3, waveY + 12);
+                    ctxS.strokeStyle = isFilled ? 'rgba(0, 230, 118, 0.6)' : 'rgba(38, 50, 43, 0.4)';
+                    ctxS.lineWidth = 1.5;
+                    ctxS.stroke();
+                }
+            }
+
+            // Голова сколопендры (активный ползунок)
+            const headX = spineCanvas.width * progress;
+            const headY = spineCy + Math.sin(spineSegments * progress * 0.4 + Date.now() * 0.005) * 4;
+            ctxS.beginPath();
+            ctxS.arc(headX, headY, 8, 0, Math.PI * 2);
+            ctxS.fillStyle = '#ff1744';
+            ctxS.fill();
+            ctxS.lineWidth = 2;
+            ctxS.strokeStyle = '#ffffff';
+            ctxS.stroke();
+
+            if (isPlaying) {
+                const currentTrackDuration = playlist[currentTrackIndex].duration;
+                progress += 1 / (currentTrackDuration * 60);
+                
+                if (progress > 1) {
+                    if (repeatMode === 'one') {
+                        progress = 0;
+                    } else {
+                        nextTrack();
+                    }
+                }
+                
+                // Обновление таймера интерфейса
+                let currentSecs = Math.floor(currentTrackDuration * progress);
+                currentTimeEl.textContent = formatTime(currentSecs);
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+    </script>
+</body>
+</html>
